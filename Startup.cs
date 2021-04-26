@@ -64,8 +64,10 @@ namespace MartenTest
                         {
                             Console.WriteLine("DB created");
                         });
-                }); 
-                
+                });
+
+                opts.Events.InlineProjections.AggregateStreamsWith<Aggregates.Booking>();
+
             });
         }
 

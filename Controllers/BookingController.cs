@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Marten;
 using Marten.Events;
+using Marten.Util;
+using MartenTest.Aggregates;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -26,28 +28,52 @@ namespace MartenTest.Controllers
         public IEnumerable<Booking> Get()
         {
             using var session = _store.QuerySession();
-            
+
             return session
                 .Query<Booking>()
-                .ToList();  
+                .ToList();
         }
 
         [HttpPost]
-        public Booking Create(string customerId, string spotId) 
+        public Booking Create(string customerId, string spotId)
         {
-            using var session = _store.LightweightSession();
-            
-            var booking = new Booking 
-            {  
+            using var session = _store.OpenSession();
+
+            var bookingCreated = new Events.BookingCreated
+            {
                 SpotId = spotId,
                 CustomerId = customerId
             };
 
-            session.Store(booking);
-
+            var bookingId = Guid.NewGuid();
+            session.Events.StartStream<Booking>(bookingId, bookingCreated);
             session.SaveChanges();
 
-            return booking;
+            return session
+                .Query<Booking>()
+                .First(b => b.Id == bookingId);
+        }
+
+        [HttpDelete]
+        public Booking Delete(Guid bookingId)
+        {
+            using var session = _store.OpenSession();
+
+            var booking = session
+                .Query<Booking>()
+                .First(b => b.Id == bookingId);
+
+            var bookingCancelled = new Events.BookingCancelled
+            {
+                SpotId = booking.SpotId,
+                CustomerId = booking.CustomerId
+            };
+            session.Events.Append(bookingId, bookingCancelled);
+            session.SaveChanges();
+
+            return session
+                .Query<Booking>()
+                .First(b => b.Id == bookingId);
         }
     }
 }
